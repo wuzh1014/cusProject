@@ -1,7 +1,7 @@
 module.exports = {
   mysql: {
-    // host: 'localhost',
-    host: 'db',
+    host: 'localhost',
+    // host: 'db',
     user: 'root',
     password: '123456',
     database: 'cusProject',
