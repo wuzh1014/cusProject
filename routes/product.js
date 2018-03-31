@@ -122,8 +122,8 @@ router.all('/createBill', function(req, res, next) {
 				'upLong', 'upTime', 'upMeter',
 				'inTime', 'inMeter', 'inLong',
 				'bottomLong', 'bottomTime', 'bottomMeter',
-				'allLong', 'flag', 'count'];
-			returnResult['contentId'] = result.insertId
+				'allLong', 'flag', 'count', 'needHead'];
+			returnResult['contentId'] = result.insertId;
 			var values = [];
 			for(var n in params.items){
 			    var _arr = [];
