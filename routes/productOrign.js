@@ -87,7 +87,7 @@ router.all('/createBillSimple', function(req, res, next) {
             queryParams.createTime = new Date();
             contentSql = 'insert into' + contentSql;
         }else{
-            contentSql = 'update' + contentSql + 'where contentId = ?';
+            contentSql = 'update' + contentSql + 'where uid = ?';
         }
 
         connection.query(contentSql, [queryParams, params.contentId], function(err, result, fields) {
@@ -103,6 +103,90 @@ router.all('/createBillSimple', function(req, res, next) {
     });
 });
 
+router.all('/createBill', function(req, res, next) {
+	var params = req.body || req.query || req.params;
+	var returnResult = {};
+    pool.getConnection(function(err, connection) {
+		if (!connection) {
+			res.json({result: 'dberror'})
+		}
+
+		var contentSql = ' BILL_CONTENT SET ? ';
+		if (params.reciveTime) {
+			params.reciveTime = new Date(params.reciveTime);
+		}else{
+			params.reciveTime = null;
+		}
+		let queryParams = {
+			titleName: params.titleName,
+			address: params.orderDetail.address,
+			mobile: params.orderDetail.mobile,
+			phone: params.orderDetail.phone,
+			name: params.orderDetail.name,
+			prize: params.orderDetail.prize,
+			reciveTime: params.orderDetail.reciveTime,
+	        preMoney: params.orderDetail.preMoney,
+	        restMoney: params.orderDetail.restMoney,
+	        cutFlag: params.orderDetail.cutFlag,
+	        sliceFlag: params.orderDetail.sliceFlag,
+	        packFlag: params.orderDetail.packFlag,
+	        operator: params.orderDetail.operator,
+		};
+		if (!params.contentId) {
+			queryParams.createTime = new Date();
+			contentSql = 'insert into' + contentSql;
+		}else{
+			contentSql = 'update' + contentSql + 'where uid = ?';
+		}
+
+		connection.query(contentSql, [queryParams, params.contentId], function(err, result, fields) {
+			if (err) throw err;
+
+			if (params.contentId) {
+				let deleteItem = function() {
+				    return new Promise(function (resovle, reject) {
+				        var insertItemSql = 'delete FROM BILL_ITEM where contentId = ?';
+						connection.query(insertItemSql, [params.contentId], function(err, result, fields) {
+							if (err) throw err;
+							resovle();
+						});
+				    });
+				};
+				let doDelete = async function () {
+				    await deleteItem();
+				}();
+				result.insertId = params.contentId;
+			}
+
+			var insertFields = [
+				'upLong', 'upTime', 'upMeter',
+				'inTime', 'inMeter', 'inLong',
+				'bottomLong', 'bottomTime', 'bottomMeter',
+				'allLong', 'flag', 'count', 'needHead'];
+			returnResult['contentId'] = result.insertId;
+			var values = [];
+			for(var n in params.items){
+			    var _arr = [];
+			    for(var m in insertFields){
+					_arr.push(params.items[n][insertFields[m]]);
+			    }
+				_arr.push(result.insertId);
+				_arr.push(params.items[n].selectTypes.join(','));
+			    values.push(_arr);
+			}
+			insertFields.push('contentId');
+			insertFields.push('selectTypes');
+
+			var insertItemSql = 'insert into BILL_ITEM('+ insertFields.join(',') +') VALUES ?';
+			connection.query(insertItemSql, [values], function(err, result, fields) {
+				if (err) throw err;
+				connection.release();
+				res.json(returnResult)
+			});
+       });
+    });
+});
+
 router.all('/getBillSimple', function(req, res, next) {
 	var resultMap = {};
     pool.getConnection(function(err, connection) {
@@ -113,17 +197,53 @@ router.all('/getBillSimple', function(req, res, next) {
 		if (!params.uid) {
 			res.json({result: 'param.error'})
 		}
-		var selectSql = 'SELECT * FROM BILL_SIMPLE WHERE exist = 1 AND contentId = ?';
+		var selectSql = 'SELECT * FROM BILL_CONTENT WHERE exist = 1 AND uid = ?';
 		connection.query(selectSql, [params.uid], function(err, result, fields) {
 			if (err) throw err;
 
-            resultMap['items'] = JSON.parse(result[0].items);
-            resultMap['orderDetail'] = JSON.parse(result[0].orderDetail);
-            resultMap['titleName'] = result[0].titleName;
-            resultMap['createTime'] = new Date(result[0].createTime);
+            resultMap['items'] = JSON.parse(result.items);
+            resultMap['orderDetail'] = JSON.parse(result.orderDetail);
+            resultMap['titleName'] = result.titleName;
+            resultMap['createTime'] = new Date(result.createTime);
 
             connection.release();
             res.json(resultMap)
+       });
+    });
+});
+router.all('/getBill', function(req, res, next) {
+	var resultMap = {};
+    pool.getConnection(function(err, connection) {
+		var params = req.body || req.query || req.params;
+		if (!connection) {
+			res.json({result: 'dberror'})
+		}
+		if (!params.uid) {
+			res.json({result: 'param.error'})
+		}
+		var selectSql = 'SELECT * FROM BILL_CONTENT WHERE exist = 1 AND uid = ?';
+		connection.query(selectSql, [params.uid], function(err, result, fields) {
+			if (err) throw err;
+			resultMap['billContent'] = result;
+			selectSql = 'SELECT i.* FROM BILL_ITEM i inner join BILL_CONTENT b on i.contentId = b.uid ' +
+			'WHERE b.exist = 1 AND b.uid = ? order by i.uid asc';
+			connection.query(selectSql, [params.uid], function(err, result, fields) {
+				if (err) throw err;
+				for (var i in result) {
+					if (result[i].selectTypes) {
+						result[i].selectTypes = result[i].selectTypes.split(',');
+						for (var k in result[i].selectTypes) {
+							result[i].selectTypes[k] = parseInt(result[i].selectTypes[k]);
+						}
+					}else{
+						result[i].selectTypes = [];
+					}
+				}
+				resultMap['items'] = result;
+				resultMap['code'] = true;
+				connection.release();
+				res.json(resultMap)
+	        });
        });
     });
 });
@@ -188,7 +308,7 @@ router.all('/deleteBillPhy', function(req, res, next) {
 		if (!params.uid) {
 			res.json({result: 'param.error'})
 		}
-		var selectSql = 'delete from BILL_SIMPLE WHERE contentId = ?';
+		var selectSql = 'delete from BILL_CONTENT WHERE uid = ?';
 		connection.query(selectSql, [params.uid], function(err, result, fields) {
 			if (err) {
 				console.info(err);
@@ -210,14 +330,16 @@ router.all('/getBillList', function(req, res, next) {
 			res.json({result: 'dberror'})
 		}
 
-		var selectSql = 'SELECT count(0) as count FROM BILL_SIMPLE WHERE exist = 1';
+		var selectSql = 'SELECT count(0) as count FROM BILL_CONTENT WHERE exist = 1';
 		var queryParams = [];
 		
 		connection.query(selectSql, queryParams, function(err, result, fields) {
 			if (err) throw err;
+
+			
 			resultMap['count'] = result[0].count;
 
-			selectSql = 'SELECT * FROM BILL_SIMPLE WHERE exist = 1';
+			selectSql = 'SELECT * FROM BILL_CONTENT WHERE exist = 1';
 			selectSql += ' order by createTime desc';
 			queryParams = [];
 

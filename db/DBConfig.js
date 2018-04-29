@@ -1,10 +1,10 @@
 module.exports = {
   mysql: {
-    host: 'localhost',
+    host: '47.88.54.29',
     // host: 'db',
     user: 'root',
     password: '123456',
     database: 'cusProject',
-    debug: true
+    debug: false
   }
 };
