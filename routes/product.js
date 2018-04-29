@@ -37,26 +37,34 @@ router.all('/getItemTypes', function(req, res, next) {
 
 
 router.all('/addItemTypes', function(req, res, next) {
-    var params = req.body || req.query || req.params;   
-	var returnResult = {};
+    let params = req.body || req.query || req.params;
+    let returnResult = {};
     pool.getConnection(function(err, connection) {
 		if (!connection) {
 			res.json({result: 'dberror'})
 		}
-		var contentSql = 'insert into ITEM_TYPES SET ?';
+		let contentSql = ' ITEM_TYPES SET ?';
 		let queryParams = {
 			name: params.name, 
 			type: params.type, 
 			prize: params.prize,
+            mini: params.mini,
 			memo: params.memo,
 			updateTime: new Date(),
-			createTime: new Date(),
 		};
-		connection.query(contentSql, [queryParams], function(err, result, fields) {
+        if (!params.uid) {
+            queryParams.createTime = new Date();
+            contentSql = 'insert into' + contentSql;
+        }else{
+            contentSql = 'update' + contentSql + 'where uid = ?';
+        }
+		connection.query(contentSql, [queryParams, params.uid], function(err, result, fields) {
 			if (err) throw err;
-			var resultMap = {};
+            let resultMap = {};
+            if (params.uid) {
+                result.insertId = params.contentId;
+            }
 			resultMap['uid'] = result.insertId;
-			resultMap['code'] = true;
 			connection.release();
 			res.json(resultMap)
        });
@@ -64,14 +72,14 @@ router.all('/addItemTypes', function(req, res, next) {
 });
 
 router.all('/createBillSimple', function(req, res, next) {
-    var params = req.body || req.query || req.params;
-    var returnResult = {};
+    let params = req.body || req.query || req.params;
+    let returnResult = {};
     pool.getConnection(function(err, connection) {
         if (!connection) {
             res.json({result: 'dberror'})
         }
 
-        var contentSql = ' BILL_SIMPLE SET ? ';
+        let contentSql = ' BILL_SIMPLE SET ? ';
         if (!params.orderDetail.reciveTime) {
             params.orderDetail.reciveTime = new Date();
         }
@@ -174,6 +182,27 @@ router.all('/deleteItemType', function(req, res, next) {
 			}
 			connection.release();  
 			res.json(resultMap)
+       });
+    });
+});
+
+router.all('/getItemType', function(req, res, next) {
+	var resultMap = {};
+    pool.getConnection(function(err, connection) {
+		var params = req.body || req.query || req.params;
+		if (!connection) {
+			res.json({result: 'dberror'})
+		}
+		if (!params.uid) {
+			res.json({result: 'param.error'})
+		}
+		var selectSql = 'select * from ITEM_TYPES WHERE uid = ? and exist = 1';
+		connection.query(selectSql, [params.uid], function(err, result, fields) {
+			if (err) {
+                console.info(err);
+			}
+			connection.release();
+			res.json(result[0])
        });
     });
 });
